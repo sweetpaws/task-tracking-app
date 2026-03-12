@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>😸 Cozy Timer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app">
+
+    <!-- Header -->
+    <header class="app-header">
+      <span class="header-icon">😸</span>
+      <div>
+        <h1>cozy timer</h1>
+        <p class="subtitle">purrfect productivity 🐾</p>
+      </div>
+    </header>
+
+    <!-- Timer Card with Cat Ears -->
+    <div class="timer-card-wrap">
+      <div class="cat-ear cat-ear--left"><div class="ear-inner"></div></div>
+      <div class="cat-ear cat-ear--right"><div class="ear-inner"></div></div>
+
+      <div class="card timer-card">
+        <div class="input-wrap">
+          <input
+            type="text"
+            id="taskNameInput"
+            class="task-input"
+            placeholder="what are you pawing at? 🐾"
+            autocomplete="off"
+            maxlength="80"
+            spellcheck="false"
+          >
+          <div class="suggestions-dropdown" id="suggestions"></div>
+        </div>
+
+        <div class="timer-display" id="timerDisplay">
+          <span id="h">00</span><span class="sep">:</span><span id="m">00</span><span class="sep">:</span><span id="s">00</span>
+        </div>
+
+        <p class="status-msg" id="statusMsg">ready when you are~ 😽</p>
+
+        <button class="start-stop-btn" id="startStopBtn">
+          <span id="btnIcon">▶</span>
+          <span id="btnLabel">start</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Tasks List -->
+    <section class="tasks-section" id="tasksSection" hidden>
+      <h2 class="section-heading">🐾 your tasks</h2>
+      <div id="tasksList"></div>
+    </section>
+
+  </div>
+
+  <!-- Edit Modal -->
+  <div id="modal" class="modal-backdrop" hidden>
+    <div class="modal-box card" role="dialog" aria-modal="true">
+      <div class="modal-head">
+        <h3 id="modalHeading">edit</h3>
+        <button class="icon-btn" id="modalClose" aria-label="close">✕</button>
+      </div>
+
+      <div id="editTaskNameSection" class="form-section" hidden>
+        <label class="form-label" for="editTaskNameInput">task name</label>
+        <input type="text" id="editTaskNameInput" class="task-input" maxlength="80">
+      </div>
+
+      <div id="editSessionSection" class="form-section" hidden>
+        <label class="form-label" for="editStartInput">start time</label>
+        <input type="datetime-local" id="editStartInput" class="task-input">
+        <label class="form-label" for="editEndInput">end time</label>
+        <input type="datetime-local" id="editEndInput" class="task-input">
+      </div>
+
+      <div class="modal-foot">
+        <button class="btn btn-ghost" id="modalCancel">cancel</button>
+        <button class="btn btn-primary" id="modalSave">save changes</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
