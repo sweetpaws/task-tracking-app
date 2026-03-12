@@ -74,24 +74,26 @@
     </div>
   </div>
 
-  <!-- ── Main App ───────────────────────────────────────────── -->
-  <div class="app">
-
-    <!-- Header -->
-    <header class="app-header">
+  <!-- ── Top Navbar ───────────────────────────────────────────── -->
+  <header class="app-header">
+    <div class="header-brand">
       <span class="header-icon">🍵</span>
       <div>
         <h1>matcha timer</h1>
         <p class="subtitle">sip & focus 🌿</p>
       </div>
+    </div>
 
-      <!-- User pill (shown when logged in) -->
-      <div class="user-pill" id="userPill" hidden>
-        <span class="user-avatar" id="userAvatar">?</span>
-        <span class="user-name"   id="userName"></span>
-        <button class="btn btn-ghost btn-sm" id="logoutBtn">sign out</button>
-      </div>
-    </header>
+    <!-- User pill (shown when logged in) -->
+    <div class="user-pill" id="userPill" hidden>
+      <span class="user-avatar" id="userAvatar">?</span>
+      <span class="user-name"   id="userName"></span>
+      <button class="btn btn-ghost btn-sm" id="logoutBtn">sign out</button>
+    </div>
+  </header>
+
+  <!-- ── Main App ───────────────────────────────────────────── -->
+  <div class="app">
 
     <!-- Timer Card -->
     <div class="timer-card-wrap">
