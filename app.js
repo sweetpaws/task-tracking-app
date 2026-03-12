@@ -222,7 +222,7 @@ function renderTimerCard() {
     btn.classList.remove('running');
     btnIcon.textContent  = '▶';
     btnLabel.textContent = 'start';
-    statusEl.textContent = 'ready when you are~ 😽';
+    statusEl.textContent = 'ready when you are~ 💚';
     // Reset digits
     ['h','m','s'].forEach(id => document.getElementById(id).textContent = '00');
   }

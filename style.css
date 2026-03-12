@@ -13,9 +13,6 @@
   --muted:          #7A9478;
   --border:         #C4DAC0;
   --border-focus:   #8EBC8A;
-  --ear-outer:      #C4DAC0;
-  --ear-fill:       #F5FAF2;
-  --ear-pink:       #B4D4B0;
   --shadow-sm:      0 2px 10px rgba(20,50,20,0.07);
   --shadow-md:      0 4px 24px rgba(20,50,20,0.11);
   --shadow-lg:      0 8px 48px rgba(20,50,20,0.15);
@@ -87,54 +84,9 @@ body {
   box-shadow: var(--shadow-md);
 }
 
-/* ===== CAT EARS ===== */
 .timer-card-wrap {
   position: relative;
   margin-bottom: 20px;
-}
-
-.cat-ear {
-  position: absolute;
-  top: -30px;
-  width: 58px;
-  height: 34px;
-  z-index: 0;
-}
-
-.cat-ear--left  { left: 44px; }
-.cat-ear--right { right: 44px; }
-
-/* Outer triangle (border colour) */
-.cat-ear::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: var(--ear-outer);
-  clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
-}
-
-/* Inner fill (card colour) */
-.cat-ear::after {
-  content: '';
-  position: absolute;
-  top: 4px;
-  left: 4px;
-  right: 4px;
-  bottom: 0;
-  background: var(--ear-fill);
-  clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
-}
-
-/* Matcha inner ear */
-.ear-inner {
-  position: absolute;
-  top: 9px;
-  left: 12px;
-  right: 12px;
-  bottom: 4px;
-  background: var(--ear-pink);
-  clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
-  z-index: 1;
 }
 
 /* ===== TIMER CARD ===== */
