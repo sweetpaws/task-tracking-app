@@ -1,5 +1,5 @@
 // ============================================================
-//  MATCHA TIMER — app.js
+//  COZY TASK TRACKER — app.js
 // ============================================================
 
 // ── State ────────────────────────────────────────────────────
@@ -217,7 +217,7 @@ function exportCSV() {
   );
   const blob     = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
   const url      = URL.createObjectURL(blob);
-  const filename = `matcha-timer-${new Date().toISOString().slice(0, 10)}.csv`;
+  const filename = `cozy-task-tracker-${new Date().toISOString().slice(0, 10)}.csv`;
   triggerDownload(url, filename);
   URL.revokeObjectURL(url);
 }
@@ -238,7 +238,7 @@ function exportXLSX() {
     { wch: 16 }, // Duration
   ];
   const wb       = XLSX.utils.book_new();
-  const filename = `matcha-timer-${new Date().toISOString().slice(0, 10)}.xlsx`;
+  const filename = `cozy-task-tracker-${new Date().toISOString().slice(0, 10)}.xlsx`;
   XLSX.utils.book_append_sheet(wb, ws, 'Sessions');
   XLSX.writeFile(wb, filename);
 }
