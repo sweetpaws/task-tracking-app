@@ -8,8 +8,73 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
+
+  <!-- Firebase v10 compat SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
+  <!-- SheetJS for Excel export -->
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+
+  <!-- Firebase credentials (gitignored — copy firebase-config.example.js to get started) -->
+  <script src="firebase-config.js"></script>
 </head>
 <body>
+
+  <!-- ── Auth Overlay (shown when logged out) ───────────────── -->
+  <div id="authOverlay" class="modal-backdrop auth-overlay">
+    <div class="modal-box card auth-card">
+
+      <div class="auth-brand">
+        <span class="auth-brand-icon">🍵</span>
+        <span class="auth-brand-name">matcha timer</span>
+      </div>
+
+      <!-- Tabs -->
+      <div class="auth-tabs">
+        <button class="auth-tab active" id="tabSignin" data-tab="signin">sign in</button>
+        <button class="auth-tab"        id="tabSignup" data-tab="signup">sign up</button>
+      </div>
+
+      <!-- Email / password form -->
+      <form id="authForm" class="auth-form" novalidate>
+        <div class="form-section">
+          <label class="form-label" for="authEmail">email</label>
+          <input type="email" id="authEmail" class="task-input"
+            placeholder="you@example.com" autocomplete="email" required>
+        </div>
+        <div class="form-section">
+          <label class="form-label" for="authPassword">password</label>
+          <input type="password" id="authPassword" class="task-input"
+            placeholder="••••••••" autocomplete="current-password" required>
+        </div>
+
+        <p class="auth-error" id="authError" hidden></p>
+
+        <button type="submit" class="btn btn-primary auth-submit-btn" id="authSubmitBtn">
+          sign in
+        </button>
+      </form>
+
+      <!-- Divider -->
+      <div class="auth-divider"><span>or</span></div>
+
+      <!-- Google sign-in -->
+      <button class="btn btn-google" id="googleSignInBtn">
+        <svg class="google-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+          <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+          <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+          <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+        </svg>
+        continue with Google
+      </button>
+
+    </div>
+  </div>
+
+  <!-- ── Main App ───────────────────────────────────────────── -->
   <div class="app">
 
     <!-- Header -->
@@ -19,11 +84,17 @@
         <h1>matcha timer</h1>
         <p class="subtitle">sip & focus 🌿</p>
       </div>
+
+      <!-- User pill (shown when logged in) -->
+      <div class="user-pill" id="userPill" hidden>
+        <span class="user-avatar" id="userAvatar">?</span>
+        <span class="user-name"   id="userName"></span>
+        <button class="btn btn-ghost btn-sm" id="logoutBtn">sign out</button>
+      </div>
     </header>
 
     <!-- Timer Card -->
     <div class="timer-card-wrap">
-
       <div class="card timer-card">
         <div class="input-wrap">
           <input
@@ -42,7 +113,7 @@
           <span id="h">00</span><span class="sep">:</span><span id="m">00</span><span class="sep">:</span><span id="s">00</span>
         </div>
 
-        <p class="status-msg" id="statusMsg">ready when you are~ 🌿</p>
+        <p class="status-msg" id="statusMsg">ready when you are~ 💚</p>
 
         <button class="start-stop-btn" id="startStopBtn">
           <span id="btnIcon">▶</span>
@@ -53,13 +124,16 @@
 
     <!-- Tasks List -->
     <section class="tasks-section" id="tasksSection" hidden>
-      <h2 class="section-heading">🌿 your tasks</h2>
+      <div class="section-heading-row">
+        <h2 class="section-heading">🌿 your tasks</h2>
+        <button class="btn btn-ghost btn-sm" id="downloadBtn" hidden>↓ export</button>
+      </div>
       <div id="tasksList"></div>
     </section>
 
   </div>
 
-  <!-- Edit Modal -->
+  <!-- ── Edit Modal ─────────────────────────────────────────── -->
   <div id="modal" class="modal-backdrop" hidden>
     <div class="modal-box card" role="dialog" aria-modal="true">
       <div class="modal-head">
@@ -80,8 +154,26 @@
       </div>
 
       <div class="modal-foot">
-        <button class="btn btn-ghost" id="modalCancel">cancel</button>
+        <button class="btn btn-ghost"   id="modalCancel">cancel</button>
         <button class="btn btn-primary" id="modalSave">save changes</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Download Modal ────────────────────────────────────── -->
+  <div id="downloadModal" class="modal-backdrop" hidden>
+    <div class="modal-box card" role="dialog" aria-modal="true">
+      <div class="modal-head">
+        <h3>export data</h3>
+        <button class="icon-btn" id="downloadModalClose" aria-label="close">✕</button>
+      </div>
+      <p class="export-desc">
+        one row per session — task name, tags, date, start, end &amp; duration
+      </p>
+      <div class="modal-foot">
+        <button class="btn btn-ghost"   id="downloadModalCancel">cancel</button>
+        <button class="btn btn-primary" id="exportCsvBtn">CSV</button>
+        <button class="btn btn-primary" id="exportXlsxBtn">Excel (.xlsx)</button>
       </div>
     </div>
   </div>

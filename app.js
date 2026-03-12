@@ -1,5 +1,5 @@
 // ============================================================
-//  COZY TIMER — app.js
+//  MATCHA TIMER — app.js
 // ============================================================
 
 // ── State ────────────────────────────────────────────────────
@@ -13,7 +13,29 @@ const state = {
   editCtx:         null,     // { type:'taskName'|'session', taskName, sessionId? }
 };
 
-// ── Persistence ──────────────────────────────────────────────
+// ── Firebase ─────────────────────────────────────────────────
+let auth = null;
+let db   = null;
+let currentUser = null;
+
+if (typeof FIREBASE_CONFIG !== 'undefined' &&
+    FIREBASE_CONFIG.apiKey !== 'YOUR_API_KEY') {
+  try {
+    firebase.initializeApp(FIREBASE_CONFIG);
+    auth = firebase.auth();
+    db   = firebase.firestore();
+  } catch (e) {
+    console.warn('Firebase init failed:', e.message);
+  }
+} else {
+  console.warn(
+    'firebase-config.js not found or not configured. ' +
+    'Running in offline-only mode. ' +
+    'Copy firebase-config.example.js → firebase-config.js and fill in your credentials.'
+  );
+}
+
+// ── Persistence (localStorage) ───────────────────────────────
 function load() {
   try {
     const raw = localStorage.getItem('cozyTimer_v2');
@@ -22,10 +44,216 @@ function load() {
 }
 
 function save() {
+  // Always write to localStorage as a fast, offline-capable cache
   try {
     localStorage.setItem('cozyTimer_v2', JSON.stringify({ tasks: state.tasks }));
   } catch (_) {}
+  // Additionally sync to Firestore when authenticated
+  if (currentUser && db) {
+    saveToFirestore(currentUser.uid);
+  }
 }
+
+// ── Persistence (Firestore) ───────────────────────────────────
+async function loadFromFirestore(uid) {
+  try {
+    const doc = await db.collection('users').doc(uid).get();
+    if (doc.exists) {
+      state.tasks = doc.data().tasks ?? {};
+    } else {
+      // First login — seed from localStorage so existing data isn't lost
+      const raw = localStorage.getItem('cozyTimer_v2');
+      if (raw) state.tasks = JSON.parse(raw).tasks ?? {};
+      // Don't save yet — let the next user action push it to Firestore
+    }
+  } catch (err) {
+    console.error('Firestore load failed, falling back to localStorage:', err);
+    load();
+  }
+}
+
+let _saveDebounceTimer = null;
+function saveToFirestore(uid) {
+  clearTimeout(_saveDebounceTimer);
+  _saveDebounceTimer = setTimeout(async () => {
+    try {
+      await db.collection('users').doc(uid).set({ tasks: state.tasks });
+    } catch (err) {
+      console.error('Firestore save failed:', err);
+    }
+  }, 1000); // 1-second debounce to avoid excessive writes
+}
+
+// ── Auth state ────────────────────────────────────────────────
+if (auth) {
+  auth.onAuthStateChanged(async (user) => {
+    currentUser = user;
+
+    if (user) {
+      // Authenticated: hide overlay, show app content
+      document.getElementById('authOverlay').hidden = true;
+      document.getElementById('userPill').hidden    = false;
+
+      // Populate user pill
+      const initials = (user.displayName || user.email || '?')[0].toUpperCase();
+      document.getElementById('userAvatar').textContent = initials;
+      document.getElementById('userName').textContent   =
+        user.displayName || user.email;
+
+      // Load from Firestore, then render
+      await loadFromFirestore(user.uid);
+    } else {
+      // Logged out: show overlay, load localStorage fallback
+      document.getElementById('authOverlay').hidden = false;
+      document.getElementById('userPill').hidden    = true;
+      load();
+    }
+
+    cleanOrphanedSessions();
+    renderTimerCard();
+    renderTasks();
+  });
+} else {
+  // No Firebase — run in offline-only mode, skip auth overlay
+  document.getElementById('authOverlay').hidden = true;
+  load();
+  cleanOrphanedSessions();
+  renderTimerCard();
+  renderTasks();
+}
+
+// ── Auth actions ──────────────────────────────────────────────
+async function signInWithEmail(email, password) {
+  return auth.signInWithEmailAndPassword(email, password);
+}
+
+async function signUpWithEmail(email, password) {
+  return auth.createUserWithEmailAndPassword(email, password);
+}
+
+async function signInWithGoogle() {
+  const provider = new firebase.auth.GoogleAuthProvider();
+  return auth.signInWithPopup(provider);
+}
+
+function signOut() {
+  if (state.isRunning) stopTimer(); // end live session before logout
+  auth.signOut();
+}
+
+// ── Auth UI ───────────────────────────────────────────────────
+let authMode = 'signin'; // 'signin' | 'signup'
+
+function setAuthMode(mode) {
+  authMode = mode;
+  document.getElementById('tabSignin').classList.toggle('active', mode === 'signin');
+  document.getElementById('tabSignup').classList.toggle('active', mode === 'signup');
+  document.getElementById('authSubmitBtn').textContent =
+    mode === 'signin' ? 'sign in' : 'create account';
+  document.getElementById('authPassword').autocomplete =
+    mode === 'signin' ? 'current-password' : 'new-password';
+  clearAuthError();
+}
+
+function setAuthError(msg) {
+  const el = document.getElementById('authError');
+  el.textContent = msg;
+  el.hidden = false;
+}
+
+function clearAuthError() {
+  const el = document.getElementById('authError');
+  el.textContent = '';
+  el.hidden = true;
+}
+
+function friendlyAuthError(code) {
+  const map = {
+    'auth/invalid-email':          'please enter a valid email address.',
+    'auth/user-disabled':          'this account has been disabled.',
+    'auth/user-not-found':         'no account found with that email.',
+    'auth/wrong-password':         'incorrect password — please try again.',
+    'auth/email-already-in-use':   'an account with that email already exists.',
+    'auth/weak-password':          'password must be at least 6 characters.',
+    'auth/too-many-requests':      'too many attempts — please wait a moment.',
+    'auth/network-request-failed': 'network error — check your connection.',
+    'auth/invalid-credential':     'incorrect email or password.',
+  };
+  return map[code] || 'something went wrong — please try again.';
+}
+
+// ── Export ────────────────────────────────────────────────────
+function buildExportRows() {
+  const rows = [['Task Name', 'Tags', 'Date', 'Start Time', 'End Time', 'Duration (min)']];
+
+  for (const task of Object.values(state.tasks)) {
+    for (const sess of task.sessions) {
+      if (!sess.end) continue; // skip live sessions
+
+      const start   = new Date(sess.start);
+      const end     = new Date(sess.end);
+      const durMin  = Math.round((sess.end - sess.start) / 60000);
+      const dateStr = start.toLocaleDateString([], {
+        month: 'short', day: 'numeric', year: 'numeric'
+      });
+      const startStr = start.toLocaleTimeString([], {
+        hour: '2-digit', minute: '2-digit'
+      });
+      const endStr  = end.toLocaleTimeString([], {
+        hour: '2-digit', minute: '2-digit'
+      });
+      const tagsStr = (task.tags || []).join(', ');
+
+      rows.push([task.name, tagsStr, dateStr, startStr, endStr, durMin]);
+    }
+  }
+  return rows;
+}
+
+function exportCSV() {
+  const rows  = buildExportRows();
+  const lines = rows.map(r =>
+    r.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')
+  );
+  const blob     = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const url      = URL.createObjectURL(blob);
+  const filename = `matcha-timer-${new Date().toISOString().slice(0, 10)}.csv`;
+  triggerDownload(url, filename);
+  URL.revokeObjectURL(url);
+}
+
+function exportXLSX() {
+  if (typeof XLSX === 'undefined') {
+    alert('Excel export unavailable — SheetJS library could not be loaded. Try CSV instead.');
+    return;
+  }
+  const rows = buildExportRows();
+  const ws   = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [
+    { wch: 28 }, // Task Name
+    { wch: 20 }, // Tags
+    { wch: 16 }, // Date
+    { wch: 12 }, // Start Time
+    { wch: 12 }, // End Time
+    { wch: 16 }, // Duration
+  ];
+  const wb       = XLSX.utils.book_new();
+  const filename = `matcha-timer-${new Date().toISOString().slice(0, 10)}.xlsx`;
+  XLSX.utils.book_append_sheet(wb, ws, 'Sessions');
+  XLSX.writeFile(wb, filename);
+}
+
+function triggerDownload(url, filename) {
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+function openDownloadModal()  { document.getElementById('downloadModal').hidden = false; }
+function closeDownloadModal() { document.getElementById('downloadModal').hidden = true;  }
 
 // ── Helpers ──────────────────────────────────────────────────
 let idCounter = 0;
@@ -189,8 +417,6 @@ function tickTimer() {
   if (state.currentTask) {
     const task = state.tasks[state.currentTask];
     if (task) {
-      const card = document.querySelector(`.task-card[data-task-id]`);
-      // find by name stored in dataset
       const allCards = document.querySelectorAll('.task-card');
       for (const c of allCards) {
         if (c.dataset.taskName === state.currentTask) {
@@ -216,7 +442,7 @@ function renderTimerCard() {
     btn.classList.add('running');
     btnIcon.textContent  = '⏸';
     btnLabel.textContent = 'stop';
-    statusEl.textContent = `on the prowl: "${state.currentTask}" 🐾`;
+    statusEl.textContent = `brewing: "${state.currentTask}" 🍵`;
   } else {
     display.classList.remove('running');
     btn.classList.remove('running');
@@ -234,8 +460,15 @@ function renderTasks() {
   const list    = document.getElementById('tasksList');
 
   const names = Object.keys(state.tasks);
-  if (!names.length) { section.hidden = true; return; }
+  if (!names.length) {
+    section.hidden = true;
+    const dlBtn = document.getElementById('downloadBtn');
+    if (dlBtn) dlBtn.hidden = true;
+    return;
+  }
   section.hidden = false;
+  const dlBtn = document.getElementById('downloadBtn');
+  if (dlBtn) dlBtn.hidden = false;
 
   // Sort: running task first, then by most recent session start
   names.sort((a, b) => {
@@ -600,7 +833,7 @@ function deleteSession(taskName, sessionId) {
   renderTasks();
 }
 
-// ── Cleanup on load (orphaned live sessions from crashes) ────
+// ── Cleanup on load (orphaned live sessions from crashes) ─────
 function cleanOrphanedSessions() {
   for (const task of Object.values(state.tasks)) {
     task.sessions = task.sessions.filter(s => s.end !== null);
@@ -609,7 +842,8 @@ function cleanOrphanedSessions() {
   for (const [name, task] of Object.entries(state.tasks)) {
     if (!task.sessions.length) delete state.tasks[name];
   }
-  save();
+  // Note: don't call save() here — on first Firestore login we don't
+  // want to push the cleaned localStorage state before we've loaded cloud data
 }
 
 // ── Wire events ──────────────────────────────────────────────
@@ -622,7 +856,6 @@ document.getElementById('taskNameInput').addEventListener('input', e => {
 });
 
 document.getElementById('taskNameInput').addEventListener('blur', () => {
-  // Small delay so mousedown on suggestion fires first
   setTimeout(hideSuggestions, 160);
 });
 
@@ -642,13 +875,56 @@ document.getElementById('editTaskNameInput').addEventListener('keydown', e => {
   if (e.key === 'Escape') hideModal();
 });
 
-// Close modal on backdrop click
 document.getElementById('modal').addEventListener('click', e => {
   if (e.target === document.getElementById('modal')) hideModal();
 });
 
-// ── Init ─────────────────────────────────────────────────────
-load();
-cleanOrphanedSessions();
-renderTimerCard();
-renderTasks();
+// ── Auth event listeners ──────────────────────────────────────
+document.getElementById('tabSignin').addEventListener('click', () => setAuthMode('signin'));
+document.getElementById('tabSignup').addEventListener('click', () => setAuthMode('signup'));
+
+document.getElementById('authForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  clearAuthError();
+  const email    = document.getElementById('authEmail').value.trim();
+  const password = document.getElementById('authPassword').value;
+  try {
+    if (authMode === 'signin') {
+      await signInWithEmail(email, password);
+    } else {
+      await signUpWithEmail(email, password);
+    }
+    // onAuthStateChanged handles the rest
+  } catch (err) {
+    setAuthError(friendlyAuthError(err.code));
+  }
+});
+
+document.getElementById('googleSignInBtn').addEventListener('click', async () => {
+  clearAuthError();
+  try {
+    await signInWithGoogle();
+  } catch (err) {
+    if (err.code !== 'auth/popup-closed-by-user') {
+      setAuthError(friendlyAuthError(err.code));
+    }
+  }
+});
+
+document.getElementById('logoutBtn').addEventListener('click', signOut);
+
+// ── Download event listeners ──────────────────────────────────
+document.getElementById('downloadBtn').addEventListener('click', openDownloadModal);
+document.getElementById('downloadModalClose').addEventListener('click',  closeDownloadModal);
+document.getElementById('downloadModalCancel').addEventListener('click', closeDownloadModal);
+document.getElementById('downloadModal').addEventListener('click', e => {
+  if (e.target === document.getElementById('downloadModal')) closeDownloadModal();
+});
+document.getElementById('exportCsvBtn').addEventListener('click', () => {
+  exportCSV();
+  closeDownloadModal();
+});
+document.getElementById('exportXlsxBtn').addEventListener('click', () => {
+  exportXLSX();
+  closeDownloadModal();
+});
